@@ -1005,6 +1005,20 @@ testResult_t run() {
   MPI_Comm_split(MPI_COMM_WORLD, color, proc, &mpi_comm);
   MPI_Comm_size(mpi_comm, &ncclProcs);
   MPI_Comm_rank(mpi_comm, &ncclProc);
+#else
+  char* world_size_str = getenv("WORLD_SIZE");
+  if (world_size_str) {
+	  totalProcs = strtol(world_size_str, NULL, 0);
+	  if (totalProcs == 0) {
+		  totalProcs = 1;
+	  }
+	  ncclProcs = totalProcs;
+  }
+  char* rank_str = getenv("RANK");
+  if (rank_str) {
+	  proc = strtol(rank_str, NULL, 0);
+	  ncclProc = proc;
+  }
 #endif
   is_main_thread = is_main_proc = (proc == 0) ? 1 : 0;
 
@@ -1055,12 +1069,15 @@ testResult_t run() {
   }
 
   ncclUniqueId ncclId;
+
+#ifdef MPI_SUPPORT
   if (ncclProc == 0) {
     NCCLCHECK(ncclGetUniqueId(&ncclId));
   }
-#ifdef MPI_SUPPORT
   MPI_Bcast(&ncclId, sizeof(ncclId), MPI_BYTE, 0, mpi_comm);
   MPI_Barrier(MPI_COMM_WORLD); // Ensure Bcast is complete for HCOLL
+#else
+    NCCLCHECK(ncclGetUniqueId(&ncclId));
 #endif
   int gpus[nGpus*nThreads];
   cudaStream_t streams[nGpus*nThreads];

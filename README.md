@@ -1,24 +1,17 @@
 # NCCL Tests
 
 These tests check both the performance and the correctness of [NCCL](http://github.com/nvidia/nccl) operations.
+''This fork of repo is specially for running the nccl-tests without MPI Support''
 
 ## Build
 
-To build the tests, just type `make` or `make -j`
+To build the tests, just type `make MPI=0` or `make -j MPI=0`
 
 If CUDA is not installed in `/usr/local/cuda`, you may specify `CUDA_HOME`. Similarly, if NCCL is not installed in `/usr`, you may specify `NCCL_HOME`.
 
 ```shell
 $ make CUDA_HOME=/path/to/cuda NCCL_HOME=/path/to/nccl
 ```
-
-NCCL tests rely on MPI to work on multiple processes, hence multiple nodes. If you want to compile the tests with MPI support, you need to set `MPI=1` and set `MPI_HOME` to the path where MPI is installed.
-
-```shell
-$ make MPI=1 MPI_HOME=/path/to/mpi CUDA_HOME=/path/to/cuda NCCL_HOME=/path/to/nccl
-```
-
-You can also add a suffix to the name of the generated binaries with `NAME_SUFFIX`. For example when compiling with the MPI versions you could use:
 
 ```shell
 $ make MPI=1 NAME_SUFFIX=_mpi MPI_HOME=/path/to/mpi CUDA_HOME=/path/to/cuda NCCL_HOME=/path/to/nccl
@@ -36,13 +29,15 @@ Run on single node with 8 GPUs (`-g 8`), scanning from 8 Bytes to 128MBytes :
 
 ```shell
 $ ./build/all_reduce_perf -b 8 -e 128M -f 2 -g 8
-```
 
-Run 64 MPI processes on nodes with 8 GPUs each, for a total of 64 GPUs spread across 8 nodes :
-(NB: The nccl-tests binaries must be compiled with `MPI=1` for this case)
+e.g. 
+DOCKER 1
 
-```shell
-$ mpirun -np 64 -N 8 ./build/all_reduce_perf -b 8 -e 8G -f 2 -g 1
+LD_PRELOAD=/usr/local/lib/libnccl.so  NCCL_NET=IB NCCL_P2P_DISABLE=1 NCCL_IB_HCA=roce0 NCCL_IB_GID_INDEX=3 NCCL_SOCKET_IFNAME=eth0 NCCL_IB_DISABLE=0 NCCL_DEBUG=INFO NCCL_COMM_ID=20.20.20.2:12345 WORLD_SIZE=2 RANK=0 /nvidia-tools/nccl-tests-no-ompi/build/all_reduce_perf -b 4M -e 4M
+
+DOCKER 2
+LD_PRELOAD=/usr/local/lib/libnccl.so  NCCL_NET=IB NCCL_P2P_DISABLE=1 NCCL_IB_HCA=roce0 NCCL_IB_GID_INDEX=3 NCCL_SOCKET_IFNAME=eth0 NCCL_IB_DISABLE=0 NCCL_DEBUG=INFO NCCL_COMM_ID=20.20.20.2:12345 WORLD_SIZE=2 RANK=1 /nvidia-tools/nccl-tests-no-ompi/build/all_reduce_perf -b 4M -e 4M
+
 ```
 
 ### Performance
