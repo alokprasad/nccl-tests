@@ -40,62 +40,31 @@ LD_PRELOAD=/usr/local/lib/libnccl.so  NCCL_NET=IB NCCL_P2P_DISABLE=1 NCCL_IB_HCA
 
 ```
 
-### Performance
+Note:
+If you are planning to run this on docker on same hosts you will get this message
 
-See the [Performance](doc/PERFORMANCE.md) page for explanation about numbers, and in particular the "busbw" column.
+**31a6b39aaaf4:367:372 [0] misc/socket.cc:432 NCCL WARN socketFinalizeAccept: wrong magic ba8657f4d3a5a02a != 134eccad5a34ad33**
 
-### Arguments
+To Resolve build nccl with this patch below. 
+and then load this nccl before running nccl-tests ( LD_PRELOAD=/usr/local/lib/libnccl.so)
 
-All tests support the same set of arguments :
+```
++++ b/src/misc/socket.cc
+@@ -481,11 +481,12 @@ static ncclResult_t socketFinalizeAccept(struct ncclSocket* sock) {
+       memcpy(&magic, sock->finalizeBuffer, sizeof(magic));
+     }
+     if (magic != sock->magic) {
+-      WARN("socketFinalizeAccept: wrong magic %lx != %lx", magic, sock->magic);
+-      close(sock->fd);
+-      sock->fd = -1;
++      WARN("socketFinalizeAccept2: wrong magic %lx != %lx", magic, sock->magic);
++      //close(sock->fd);
++      //sock->fd = -1;
+       // Ignore spurious connection and accept again
+-      sock->state = ncclSocketStateAccepting;
++      //sock->state = ncclSocketStateAccepting;
++      sock->state = ncclSocketStateReady;
+       return ncclSuccess;
+```
 
-* Number of GPUs
-  * `-t,--nthreads <num threads>` number of threads per process. Default : 1.
-  * `-g,--ngpus <GPUs per thread>` number of gpus per thread. Default : 1.
-* Sizes to scan
-  * `-b,--minbytes <min size in bytes>` minimum size to start with. Default : 32M.
-  * `-e,--maxbytes <max size in bytes>` maximum size to end at. Default : 32M.
-  * Increments can be either fixed or a multiplication factor. Only one of those should be used
-    * `-i,--stepbytes <increment size>` fixed increment between sizes. Default : 1M.
-    * `-f,--stepfactor <increment factor>` multiplication factor between sizes. Default : disabled.
-* NCCL operations arguments
-  * `-o,--op <sum/prod/min/max/avg/all>` Specify which reduction operation to perform. Only relevant for reduction operations like Allreduce, Reduce or ReduceScatter. Default : Sum.
-  * `-d,--datatype <nccltype/all>` Specify which datatype to use. Default : Float.
-  * `-r,--root <root/all>` Specify which root to use. Only for operations with a root like broadcast or reduce. Default : 0.
-* Performance
-  * `-n,--iters <iteration count>` number of iterations. Default : 20.
-  * `-w,--warmup_iters <warmup iteration count>` number of warmup iterations (not timed). Default : 5.
-  * `-m,--agg_iters <aggregation count>` number of operations to aggregate together in each iteration. Default : 1.
-  * `-N,--run_cycles <cycle count>` run & print each cycle. Default : 1; 0=infinite.
-  * `-a,--average <0/1/2/3>` Report performance as an average across all ranks (MPI=1 only). <0=Rank0,1=Avg,2=Min,3=Max>. Default : 1.
-* Test operation
-  * `-p,--parallel_init <0/1>` use threads to initialize NCCL in parallel. Default : 0.
-  * `-c,--check <check iteration count>` perform count iterations, checking correctness of results on each iteration. This can be quite slow on large numbers of GPUs. Default : 1.
-  * `-z,--blocking <0/1>` Make NCCL collective blocking, i.e. have CPUs wait and sync after each collective. Default : 0.
-  * `-G,--cudagraph <num graph launches>` Capture iterations as a CUDA graph and then replay specified number of times. Default : 0.
-  * `-C,--report_cputime <0/1>` Report CPU time instead of latency. Default : 0.
-  * `-R,--local_register <0/1/2>` enable local (1) or symmetric (2) buffer registration on send/recv buffers. Default : 0.
-  * `-T,--timeout <time in seconds>` timeout each test after specified number of seconds. Default : disabled.
 
-### Running multiple operations in parallel
-
-NCCL tests allow to partition the set of GPUs into smaller sets, each executing the same operation in parallel.
-To split the GPUs, NCCL will compute a "color" for each rank, based on the `NCCL_TESTS_SPLIT` environment variable, then all ranks
-with the same color will end up in the same group. The resulting group is printed next to each GPU at the beginning of the test.
-
-`NCCL_TESTS_SPLIT` takes the following syntax: `<operation><value>`. Operation can be `AND`, `OR`, `MOD` or `DIV`. The `&`, `|`, `%`, and `/` symbols are also supported. The value can be either decimal, hexadecimal (prefixed by `0x`) or binary (prefixed by `0b`).
-
-`NCCL_TESTS_SPLIT_MASK="<value>"` is equivalent to `NCCL_TESTS_SPLIT="&<value>"`.
-
-Here are a few examples:
-
- - `NCCL_TESTS_SPLIT="AND 0x7"` or `NCCL_TESTS_SPLIT="MOD 8"`: On systems with 8 GPUs, run 8 parallel operations, each with 1 GPU per node (purely communicating over the inter-node network)
-
-- `NCCL_TESTS_SPLIT="OR 0x7"` or `NCCL_TESTS_SPLIT="DIV 8"`: On systems with 8 GPUs, run one operation per node, purely intra-node.
-
-- `NCCL_TESTS_SPLIT="AND 0x1"` or `NCCL_TESTS_SPLIT="MOD 2"`: Run two operations, each operation using every other rank.
-
-Note that the reported bandwidth is per group, hence to get the total bandwidth used by all groups, one must multiply by the number of groups.
-
-## Copyright
-
-NCCL tests are provided under the BSD license. All source code and accompanying documentation is copyright (c) 2016-2025, NVIDIA CORPORATION. All rights reserved.
